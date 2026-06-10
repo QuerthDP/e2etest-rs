@@ -15,6 +15,8 @@ the framework.
 
 - [e2etest](crates/e2etest/README.md): The main crate which provides the core
   functionality for E2E testing
+- [e2etest-macros](crates/e2etest-macros/README.md): The crate which provides
+  procedural macros
 - [e2etest-dns](crates/e2etest-dns/README.md): A DNS server
 - [e2etest-firewall](crates/e2etest-firewall/README.md): A firewall emulator
 - [e2etest-scylla-cluster](crates/e2etest-scylla-cluster/README.md): A ScyllaDB

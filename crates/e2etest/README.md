@@ -17,53 +17,103 @@ other testing actors - so the provided binary ought to be run in the unshared
 environment.  In the future `e2etest` will provide the unshared environment
 directly, without additional setup.
 
+To use macros provided by `e2etest`, you need to add `linkme` and
+`async-backtrace` to your `Cargo.toml` dependencies.
+
+
 **Sample code for using `e2etest`**
 
 ```rust
-use e2etest::TestCase;
+mod sample {
+
 use std::net::Ipv4Addr;
+use std::sync::Arc;
 use std::time::Duration;
 
-#[derive(clap::Args)]
-struct Args {
-    #[arg(short, long, default_value = "127.0.100.1")]
+#[derive(Clone, Copy)]
+pub struct FixtureCfg {
+    pub dns_ip: Ipv4Addr,
+}
+
+#[derive(Clone, Copy)]
+pub struct FixtureOne {
     dns_ip: Ipv4Addr,
 }
 
-fn init(args: &Args) {
-}
-
-#[derive(Clone)]
-struct Fixture {
-    dns_ip: Ipv4Addr,
-}
-
-async fn fixture(args: &Args) -> Fixture {
-    Fixture {
-        dns_ip: args.dns_ip,
+impl e2etest::Fixture for FixtureOne {
+    async fn setup(setup: &mut impl e2etest::Setup) -> Self {
+        let cfg = setup.get::<FixtureCfg>().await.unwrap();
+        Self { dns_ip: cfg.dns_ip }
     }
+
+    async fn teardown(self) { }
 }
 
-async fn init_testcase(fixture: Fixture) {
+#[derive(Clone, Copy)]
+pub struct FixtureTwo {
+    octet: u8,
 }
 
-async fn cleanup_testcase(fixture: Fixture) {
+impl e2etest::Fixture for FixtureTwo {
+    async fn setup(setup: &mut impl e2etest::Setup) -> Self {
+        let one = setup.setup::<FixtureOne>().await;
+        Self { octet: one.dns_ip.octets()[2] }
+    }
+
+    async fn teardown(self) { }
 }
 
-async fn dns_ip(fixture: Fixture) {
-    assert_eq!(fixture.dns_ip, Ipv4Addr::new(127, 0, 100, 1));
+#[derive(Clone, Copy)]
+pub struct FixtureThree {
+    number: usize,
 }
 
-async fn register() -> Vec<(String, TestCase<Fixture>)> {
-    let timeout = Duration::from_secs(10);
-    let testcase = TestCase::empty()
-        .with_init(timeout, init_testcase)
-        .with_cleanup(timeout, cleanup_testcase)
-        .with_test("dns_ip", timeout, dns_ip);
-    vec![("simple".to_string(), testcase)]
+impl e2etest::Fixture for FixtureThree {
+    async fn setup(setup: &mut impl e2etest::Setup) -> Self {
+        let two = setup.setup::<FixtureTwo>().await;
+        Self { number: two.octet as usize * 1024 }
+    }
+
+    async fn teardown(self) { }
 }
 
-e2etest::run(["validator", "run"], init, register, fixture);
+e2etest::group!(name = root, fixtures = (FixtureOne));
+
+e2etest::group!(name = group, fixtures = (FixtureTwo), parent = root);
+
+#[e2etest::test(group = group, timeout = Duration::from_secs(5))]
+async fn dns_ip_100(one: Arc<FixtureOne>, two: Arc<FixtureTwo>) {
+    assert_eq!(one.dns_ip, Ipv4Addr::new(127, 0, 100, 1));
+    assert_eq!(two.octet, 100);
+}
+
+#[e2etest::test(group = group, skip = true)]
+async fn dns_ip_200(one: Arc<FixtureOne>) {
+    assert_eq!(one.dns_ip, Ipv4Addr::new(127, 0, 200, 1));
+}
+
+#[e2etest::test(group = group)]
+async fn number_and_octet(two: Arc<FixtureTwo>, three: Arc<FixtureThree>) {
+    assert_eq!(two.octet, 100);
+    assert_eq!(three.number, 100 * 1024);
+}
+
+}
+
+tokio::runtime::Runtime::new().unwrap().block_on(async move {
+    use std::net::Ipv4Addr;
+    use std::time::Duration;
+
+    let config = e2etest::Config::default()
+        .with_permanent_fixture(sample::FixtureCfg { dns_ip: Ipv4Addr::new(127, 0, 100, 1) })
+        .with_default_timeout(Duration::from_secs(10));
+    let stats = e2etest::run(config, sample::root()).await;
+    assert!(stats.is_success());
+    assert_eq!(stats.total(), 3);
+    assert_eq!(stats.launched(), 2);
+    assert_eq!(stats.ok(), 2);
+    assert_eq!(stats.skipped(), 1);
+});
 ```
 
 **Sample code for script to run in the unshared environment:**

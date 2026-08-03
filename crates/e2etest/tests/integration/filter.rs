@@ -17,9 +17,9 @@ struct Counter(Arc<AtomicUsize>);
 struct FixtureCount(Arc<Counter>);
 
 impl Fixture for FixtureCount {
-    async fn setup(setup: &mut impl Setup) -> Self {
+    async fn setup(setup: &mut impl Setup) -> Option<Self> {
         let counter = setup.get::<Counter>().await.unwrap();
-        Self(counter)
+        Some(Self(counter))
     }
     async fn teardown(self) {}
 }

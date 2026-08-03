@@ -11,6 +11,7 @@ use async_backtrace::framed;
 use futures::future::BoxFuture;
 use tracing::Instrument;
 use tracing::error_span;
+use tracing::info;
 
 /// A group of tests.
 ///
@@ -79,22 +80,43 @@ where
                 parent_names.push(self.name().to_string());
 
                 // Setup the fixture. If it fails, we skip the tests
-                let Ok(fixture) = task::setup(
+                let fixture = task::setup(
                     ctx.fixtures.setup::<F>(),
                     F::timeout_setup().unwrap_or(ctx.default_timeout),
                     ctx.clone(),
                 )
-                .await
-                else {
-                    // Setup could have created other fixtures, so we need to teardown those
-                    _ = task::teardown(
-                        ctx.fixtures.teardown(),
-                        F::timeout_teardown().unwrap_or(ctx.default_timeout),
-                        ctx.clone(),
-                    )
-                    .await;
-                    ctx.statistics.record_group_failure(parent_names.join("::"));
-                    return;
+                .await;
+                let fixture = match fixture {
+                    Ok(Some(fixture)) => fixture,
+                    Ok(None) => {
+                        info!("Skipping group because fixture setup returned None");
+
+                        ctx.statistics.increment_skipped_groups();
+
+                        // Setup could have created other fixtures, so we need to teardown those
+                        if task::teardown(
+                            ctx.fixtures.teardown(),
+                            F::timeout_teardown().unwrap_or(ctx.default_timeout),
+                            ctx.clone(),
+                        )
+                        .await
+                        .is_err()
+                        {
+                            ctx.statistics.record_group_failure(parent_names.join("::"));
+                        }
+                        return;
+                    }
+                    Err(()) => {
+                        // Setup could have created other fixtures, so we need to teardown those
+                        _ = task::teardown(
+                            ctx.fixtures.teardown(),
+                            F::timeout_teardown().unwrap_or(ctx.default_timeout),
+                            ctx.clone(),
+                        )
+                        .await;
+                        ctx.statistics.record_group_failure(parent_names.join("::"));
+                        return;
+                    }
                 };
 
                 // Run groups
@@ -147,8 +169,8 @@ mod tests {
     struct GroupFixture;
 
     impl Fixture for GroupFixture {
-        async fn setup(_: &mut impl Setup) -> Self {
-            Self
+        async fn setup(_: &mut impl Setup) -> Option<Self> {
+            Some(Self)
         }
         async fn teardown(self) {
             panic!("cleanup")
@@ -165,8 +187,8 @@ mod tests {
     }
 
     impl Fixture for TestFixture {
-        async fn setup(_: &mut impl Setup) -> Self {
-            Self
+        async fn setup(_: &mut impl Setup) -> Option<Self> {
+            Some(Self)
         }
         async fn teardown(self) {}
     }

@@ -184,8 +184,8 @@ fn generate_group(params: GroupParams) -> syn::Result<proc_macro2::TokenStream> 
 
         struct #group_fixture(#(std::sync::Arc<#fixtures>),*);
         impl e2etest::Fixture for #group_fixture {
-            async fn setup(setup: &mut impl e2etest::Setup) -> Self {
-                Self(#(setup.setup::<#fixtures>().await),*)
+            async fn setup(setup: &mut impl e2etest::Setup) -> Option<Self> {
+                Some(Self(#(setup.setup::<#fixtures>().await?),*))
             }
             async fn teardown(self) { }
         }
@@ -388,8 +388,8 @@ fn generate_test(params: TestParams, run: ItemFn) -> syn::Result<proc_macro2::To
     let expanded = quote! {
         struct #test_fixture(#(std::sync::Arc<#fixtures>),*);
         impl e2etest::Fixture for #test_fixture {
-            async fn setup(setup: &mut impl e2etest::Setup) -> Self {
-                Self(#(setup.setup::<#fixtures>().await),*)
+            async fn setup(setup: &mut impl e2etest::Setup) -> Option<Self> {
+                Some(Self(#(setup.setup::<#fixtures>().await?),*))
             }
             async fn teardown(self) { }
         }

@@ -29,9 +29,9 @@
 //! }
 //!
 //! impl e2etest::Fixture for FixtureOne {
-//!     async fn setup(setup: &mut impl e2etest::Setup) -> Self {
+//!     async fn setup(setup: &mut impl e2etest::Setup) -> Option<Self> {
 //!         let cfg = setup.get::<FixtureCfg>().await.unwrap();
-//!         Self { dns_ip: cfg.dns_ip }
+//!         Some(Self { dns_ip: cfg.dns_ip })
 //!     }
 //!
 //!     async fn teardown(self) { }
@@ -43,9 +43,9 @@
 //! }
 //!
 //! impl e2etest::Fixture for FixtureTwo {
-//!     async fn setup(setup: &mut impl e2etest::Setup) -> Self {
-//!         let one = setup.setup::<FixtureOne>().await;
-//!         Self { octet: one.dns_ip.octets()[2] }
+//!     async fn setup(setup: &mut impl e2etest::Setup) -> Option<Self> {
+//!         let one = setup.setup::<FixtureOne>().await?;
+//!         Some(Self { octet: one.dns_ip.octets()[2] })
 //!     }
 //!
 //!     async fn teardown(self) { }
@@ -57,9 +57,9 @@
 //! }
 //!
 //! impl e2etest::Fixture for FixtureThree {
-//!     async fn setup(setup: &mut impl e2etest::Setup) -> Self {
-//!         let two = setup.setup::<FixtureTwo>().await;
-//!         Self { number: two.octet as usize * 1024 }
+//!     async fn setup(setup: &mut impl e2etest::Setup) -> Option<Self> {
+//!         let two = setup.setup::<FixtureTwo>().await?;
+//!         Some(Self { number: two.octet as usize * 1024 })
 //!     }
 //!
 //!     async fn teardown(self) { }

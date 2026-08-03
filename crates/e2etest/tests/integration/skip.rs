@@ -16,9 +16,9 @@ struct Counter(Arc<AtomicUsize>);
 struct Fixture(Arc<Counter>);
 
 impl e2etest::Fixture for Fixture {
-    async fn setup(setup: &mut impl Setup) -> Self {
+    async fn setup(setup: &mut impl Setup) -> Option<Self> {
         let counter = setup.get::<Counter>().await.unwrap();
-        Self(counter)
+        Some(Self(counter))
     }
     async fn teardown(self) {}
 }

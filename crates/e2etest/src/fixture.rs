@@ -91,6 +91,16 @@ pub trait Setup: Send {
     fn get<F: Send + Sync + 'static>(&self) -> impl Future<Output = Option<Arc<F>>> + Send;
 }
 
+/// A fixture that always skips a test or a group.
+pub struct Skip;
+
+impl Fixture for Skip {
+    async fn setup(_setup: &mut impl Setup) -> Option<Self> {
+        None
+    }
+    async fn teardown(self) {}
+}
+
 struct Inner {
     permanent: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
     cache: HashMap<TypeId, Arc<dyn Teardown>>,

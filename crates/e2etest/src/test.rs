@@ -24,11 +24,6 @@ pub trait Test: Send + Sync + 'static {
         None
     }
 
-    /// Whether to skip this test. If `true`, the test will be skipped and not run.
-    fn skip(&self) -> bool {
-        false
-    }
-
     /// The name of the test.
     fn name(&self) -> &str;
 
@@ -62,11 +57,6 @@ where
         let name = format!("{group_name}::{name}", name = self.name());
         Box::pin(
             async move {
-                if self.skip() {
-                    ctx.statistics.increment_skipped();
-                    return;
-                }
-
                 // Setup the fixture. If it fails, we skip the test and teardown.
                 let fixture = task::setup(
                     ctx.fixtures.setup::<F>(),

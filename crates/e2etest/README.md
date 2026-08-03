@@ -87,8 +87,8 @@ async fn dns_ip_100(one: Arc<FixtureOne>, two: Arc<FixtureTwo>) {
     assert_eq!(two.octet, 100);
 }
 
-#[e2etest::test(group = group, skip = true)]
-async fn dns_ip_200(one: Arc<FixtureOne>) {
+#[e2etest::test(group = group)]
+async fn dns_ip_200(one: Arc<FixtureOne>, _: Arc<e2etest::Skip>) {
     assert_eq!(one.dns_ip, Ipv4Addr::new(127, 0, 200, 1));
 }
 

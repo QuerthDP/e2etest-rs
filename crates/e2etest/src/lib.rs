@@ -75,8 +75,8 @@
 //!     assert_eq!(two.octet, 100);
 //! }
 //!
-//! #[e2etest::test(group = group, skip = true)]
-//! async fn dns_ip_200(one: Arc<FixtureOne>) {
+//! #[e2etest::test(group = group)]
+//! async fn dns_ip_200(one: Arc<FixtureOne>, _: Arc<e2etest::Skip>) {
 //!     assert_eq!(one.dns_ip, Ipv4Addr::new(127, 0, 200, 1));
 //! }
 //!
@@ -117,6 +117,7 @@ use crate::filter::Filter;
 pub use crate::fixture::Fixture;
 use crate::fixture::Fixtures;
 pub use crate::fixture::Setup;
+pub use crate::fixture::Skip;
 pub use crate::group::Group;
 pub use crate::group::RunGroup;
 pub use crate::statistics::Statistics;

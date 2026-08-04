@@ -8,7 +8,9 @@ use crate::run::RunContext;
 use crate::task;
 use crate::test::RunTest;
 use async_backtrace::framed;
+use futures::StreamExt;
 use futures::future::BoxFuture;
+use futures::stream;
 use tracing::Instrument;
 use tracing::error_span;
 use tracing::info;
@@ -74,7 +76,7 @@ where
     }
 
     #[framed]
-    fn run_group(&self, mut parent_names: Vec<String>, ctx: RunContext) -> BoxFuture<'_, ()> {
+    fn run_group(&self, mut parent_names: Vec<String>, mut ctx: RunContext) -> BoxFuture<'_, ()> {
         Box::pin(
             async move {
                 parent_names.push(self.name().to_string());
@@ -119,6 +121,8 @@ where
                     }
                 };
 
+                ctx.update_concurrency_enabled(F::test_can_run_concurrently());
+
                 // Run groups
                 for group in self.groups().iter().filter(|group| {
                     ctx.filter
@@ -127,14 +131,29 @@ where
                     group.run_group(parent_names.clone(), ctx.clone()).await;
                 }
 
-                // Run tests
-                for test in self
-                    .tests()
-                    .iter()
-                    .filter(|test| ctx.filter.consider_test(&parent_names, test.name()))
-                {
+                // Run concurrent tests
+                stream::iter(
+                    self.tests()
+                        .iter()
+                        .filter(|test| ctx.filter.consider_test(&parent_names, test.name()))
+                        .filter(|test| ctx.is_concurrency_enabled(test.can_run_concurrently())),
+                )
+                .for_each_concurrent(Some(ctx.concurrency), |test| async {
                     _ = test.run_test(self.name(), ctx.clone()).await;
-                }
+                })
+                .await;
+
+                // Run non-concurrent tests
+                stream::iter(
+                    self.tests()
+                        .iter()
+                        .filter(|test| ctx.filter.consider_test(&parent_names, test.name()))
+                        .filter(|test| !ctx.is_concurrency_enabled(test.can_run_concurrently())),
+                )
+                .for_each(|test| async {
+                    _ = test.run_test(self.name(), ctx.clone()).await;
+                })
+                .await;
 
                 // Drop the fixture as it is no longer needed.
                 drop(fixture);

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
+mod concurrency;
 mod filter;
 mod hierarchy;
 mod skip;

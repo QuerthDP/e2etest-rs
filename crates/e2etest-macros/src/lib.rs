@@ -132,7 +132,9 @@ impl Parse for GroupParams {
 /// It generates a struct implementing `e2etest::Group` trait and registers it in the framework.
 /// The macro takes the following parameters:
 /// - `name`: the name of the group (required)
-/// - `fixtures`: a tuple of fixture types that will be set up for each test in the group (optional)
+/// - `fixtures`: a tuple of fixture types that will be set up for each test in the group
+///   (optional). The test_can_run_concurrently() method of generated fixture is a conjunction of
+///   the test_can_run_concurrently() methods of all fixtures and true.
 /// - `parent`: a path to the parent group, if this group is a subgroup (optional)
 ///
 /// If you use this macro you should add `linkme` as a dependency in your crate.
@@ -188,6 +190,9 @@ fn generate_group(params: GroupParams) -> syn::Result<proc_macro2::TokenStream> 
                 Some(Self(#(setup.setup::<#fixtures>().await?),*))
             }
             async fn teardown(self) { }
+            fn test_can_run_concurrently() -> bool {
+                #(#fixtures::test_can_run_concurrently() &&)* true
+            }
         }
 
         struct #group_type;
@@ -308,6 +313,9 @@ fn take_fixtures(run: &ItemFn) -> syn::Result<Vec<TypePath>> {
 /// The test function must be async, return `()`, and take as arguments a list of `Arc<Fixture>`
 /// as a list of fixtures used inside the test.
 ///
+/// The test_can_run_concurrently() method of a generated fixture is a conjunction of the
+/// test_can_run_concurrently() methods of all used fixtures and true.
+///
 /// If you use this macro you should add `linkme` and `async-backtrace` as a dependency in your crate.
 #[proc_macro_attribute]
 pub fn test(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -373,6 +381,9 @@ fn generate_test(params: TestParams, run: ItemFn) -> syn::Result<proc_macro2::To
                 Some(Self(#(setup.setup::<#fixtures>().await?),*))
             }
             async fn teardown(self) { }
+            fn test_can_run_concurrently() -> bool {
+                #(#fixtures::test_can_run_concurrently() &&)* true
+            }
         }
 
         struct #test_type;

@@ -184,3 +184,7 @@ pub async fn run(config: Config, group: Box<dyn RunGroup>) -> Statistics {
 
     run::run(fixtures, group, filter, config.default_timeout).await
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadMe;

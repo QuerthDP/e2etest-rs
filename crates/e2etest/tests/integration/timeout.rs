@@ -59,10 +59,10 @@ async fn timeout() {
     assert_eq!(counter.load(Ordering::Relaxed), 2);
 
     assert!(!stats.is_success());
-    assert_eq!(stats.total(), 3);
-    assert_eq!(stats.launched(), 3);
-    assert_eq!(stats.ok(), 2);
-    assert_eq!(stats.failed_tests(), 1);
+    assert_eq!(stats.tests_defined(), 3);
+    assert_eq!(stats.tests_launched(), 3);
+    assert_eq!(stats.tests_passed(), 2);
+    assert_eq!(stats.tests_failed(), 1);
     assert_eq!(
         stats.failed_names(),
         vec!["timeout_root::timeouted".to_string()]

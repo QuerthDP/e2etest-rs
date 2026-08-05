@@ -60,16 +60,14 @@ async fn skip() {
     )
     .await;
 
-    // 3 tests - 1 test-skipped
+    // 4 tests - 2 test-skipped
     assert_eq!(counter.load(Ordering::Relaxed), 2);
 
     assert!(stats.is_success());
-    assert_eq!(stats.total(), 4);
-    assert_eq!(stats.included(), 4);
-    assert_eq!(stats.launched(), 2);
-    assert_eq!(stats.ok(), 2);
-    assert_eq!(stats.failed_tests(), 0);
-    assert_eq!(stats.failed_groups(), 0);
-    assert_eq!(stats.skipped(), 1);
-    assert_eq!(stats.skipped_groups(), 1);
+    assert_eq!(stats.tests_defined(), 4);
+    assert_eq!(stats.tests_included(), 4);
+    assert_eq!(stats.tests_launched(), 2);
+    assert_eq!(stats.tests_passed(), 2);
+    assert_eq!(stats.tests_failed(), 0);
+    assert_eq!(stats.tests_skipped(), 2);
 }

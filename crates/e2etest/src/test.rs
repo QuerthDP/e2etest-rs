@@ -5,6 +5,7 @@
 
 use crate::fixture::Fixture;
 use crate::run::RunContext;
+use crate::statistics::Task;
 use crate::task;
 use async_backtrace::framed;
 use futures::future::BoxFuture;
@@ -12,7 +13,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::Instrument;
 use tracing::error_span;
-use tracing::info;
 
 /// A test that can be run by the test runner.
 pub trait Test: Send + Sync + 'static {
@@ -66,6 +66,8 @@ where
             async move {
                 // Setup the fixture. If it fails, we skip the test and teardown.
                 let fixture = task::setup(
+                    &name,
+                    Task::Test,
                     ctx.fixtures.setup::<F>(),
                     F::timeout_setup().unwrap_or(ctx.default_timeout),
                     ctx.clone(),
@@ -73,41 +75,21 @@ where
                 .await;
                 let fixture = match fixture {
                     Ok(Some(fixture)) => fixture,
-                    Ok(None) => {
-                        info!("Skipping test because fixture setup returned None");
-
-                        ctx.statistics.increment_skipped();
-
+                    Ok(None) | Err(()) => {
                         // Setup could have created other fixtures, so we need to teardown those
-                        if task::teardown(
-                            ctx.fixtures.teardown(),
-                            F::timeout_teardown().unwrap_or(ctx.default_timeout),
-                            ctx.clone(),
-                        )
-                        .await
-                        .is_err()
-                        {
-                            ctx.statistics.record_test_failure(name);
-                        }
-                        return;
-                    }
-                    Err(()) => {
-                        // Setup could have created other fixtures, so we need to teardown those
-                        _ = task::teardown(
+                        task::teardown(
+                            &name,
                             ctx.fixtures.teardown(),
                             F::timeout_teardown().unwrap_or(ctx.default_timeout),
                             ctx.clone(),
                         )
                         .await;
-
-                        ctx.statistics.record_test_failure(name);
                         return;
                     }
                 };
 
-                ctx.statistics.increment_launched();
-
-                let test_result = task::test(
+                task::test(
+                    &name,
                     self.run(fixture.clone()),
                     self.timeout().unwrap_or(ctx.default_timeout),
                     ctx.clone(),
@@ -118,17 +100,13 @@ where
                 drop(fixture);
 
                 // Run the teardown
-                let teardown_result = task::teardown(
+                task::teardown(
+                    &name,
                     ctx.fixtures.teardown(),
                     F::timeout_teardown().unwrap_or(ctx.default_timeout),
                     ctx.clone(),
                 )
                 .await;
-
-                match (test_result, teardown_result) {
-                    (Ok(_), Ok(_)) => ctx.statistics.increment_ok(),
-                    _ => ctx.statistics.record_test_failure(name),
-                }
             }
             .instrument(error_span!("test", "{}", self.name())),
         )

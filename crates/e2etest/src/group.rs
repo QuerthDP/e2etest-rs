@@ -5,6 +5,7 @@
 
 use crate::fixture::Fixture;
 use crate::run::RunContext;
+use crate::statistics::Task;
 use crate::task;
 use crate::test::RunTest;
 use async_backtrace::framed;
@@ -13,7 +14,6 @@ use futures::future::BoxFuture;
 use futures::stream;
 use tracing::Instrument;
 use tracing::error_span;
-use tracing::info;
 
 /// A group of tests.
 ///
@@ -80,9 +80,12 @@ where
         Box::pin(
             async move {
                 parent_names.push(self.name().to_string());
+                let group_name = parent_names.join("::");
 
                 // Setup the fixture. If it fails, we skip the tests
                 let fixture = task::setup(
+                    &group_name,
+                    Task::Group,
                     ctx.fixtures.setup::<F>(),
                     F::timeout_setup().unwrap_or(ctx.default_timeout),
                     ctx.clone(),
@@ -90,33 +93,15 @@ where
                 .await;
                 let fixture = match fixture {
                     Ok(Some(fixture)) => fixture,
-                    Ok(None) => {
-                        info!("Skipping group because fixture setup returned None");
-
-                        ctx.statistics.increment_skipped_groups();
-
+                    Ok(None) | Err(()) => {
                         // Setup could have created other fixtures, so we need to teardown those
-                        if task::teardown(
-                            ctx.fixtures.teardown(),
-                            F::timeout_teardown().unwrap_or(ctx.default_timeout),
-                            ctx.clone(),
-                        )
-                        .await
-                        .is_err()
-                        {
-                            ctx.statistics.record_group_failure(parent_names.join("::"));
-                        }
-                        return;
-                    }
-                    Err(()) => {
-                        // Setup could have created other fixtures, so we need to teardown those
-                        _ = task::teardown(
+                        task::teardown(
+                            &group_name,
                             ctx.fixtures.teardown(),
                             F::timeout_teardown().unwrap_or(ctx.default_timeout),
                             ctx.clone(),
                         )
                         .await;
-                        ctx.statistics.record_group_failure(parent_names.join("::"));
                         return;
                     }
                 };
@@ -139,7 +124,7 @@ where
                         .filter(|test| ctx.is_concurrency_enabled(test.can_run_concurrently())),
                 )
                 .for_each_concurrent(Some(ctx.concurrency), |test| async {
-                    _ = test.run_test(self.name(), ctx.clone()).await;
+                    _ = test.run_test(&group_name, ctx.clone()).await;
                 })
                 .await;
 
@@ -151,7 +136,7 @@ where
                         .filter(|test| !ctx.is_concurrency_enabled(test.can_run_concurrently())),
                 )
                 .for_each(|test| async {
-                    _ = test.run_test(self.name(), ctx.clone()).await;
+                    _ = test.run_test(&group_name, ctx.clone()).await;
                 })
                 .await;
 
@@ -159,16 +144,13 @@ where
                 drop(fixture);
 
                 // Teardown group fixture
-                if task::teardown(
+                task::teardown(
+                    &group_name,
                     ctx.fixtures.teardown(),
                     F::timeout_teardown().unwrap_or(ctx.default_timeout),
                     ctx.clone(),
                 )
-                .await
-                .is_err()
-                {
-                    ctx.statistics.record_group_failure(parent_names.join("::"));
-                }
+                .await;
             }
             .instrument(error_span!("group", "{}", self.name())),
         )
@@ -180,6 +162,7 @@ mod tests {
     use super::*;
     use crate::filter::Filter;
     use crate::fixture::Setup;
+    use crate::statistics::Event;
     use crate::test::Test;
     use std::sync::Arc;
     use std::time::Duration;
@@ -260,14 +243,24 @@ mod tests {
         let ctx = RunContext::new()
             .with_filter(Filter::new(&[], group.as_ref()))
             .with_default_timeout(Duration::from_secs(1));
+
+        ctx.statistics.record("crud::ok", Event::TestDefined);
+        ctx.statistics.record("crud::boom", Event::TestDefined);
+        ctx.statistics.record("crud::ok", Event::TestIncluded);
+        ctx.statistics.record("crud::boom", Event::TestIncluded);
+
         group.run_group(vec![], ctx.clone()).await;
 
         assert!(!ctx.statistics.is_success());
-        assert_eq!(ctx.statistics.failed_tests(), 1);
-        assert_eq!(ctx.statistics.failed_groups(), 1);
+        assert_eq!(ctx.statistics.tests_included(), 2);
+        assert_eq!(ctx.statistics.tests_launched(), 2);
+        assert_eq!(ctx.statistics.tests_passed(), 1);
+        assert_eq!(ctx.statistics.tests_failed(), 1);
+        assert_eq!(ctx.statistics.tests_skipped_by_fixture_err(), 0);
+        assert_eq!(ctx.statistics.teardowns_failed(), 1);
         assert_eq!(
             ctx.statistics.failed_names(),
-            &["crud::boom".to_string(), "crud".to_string()]
+            &["crud".to_string(), "crud::boom".to_string()]
         );
     }
 }

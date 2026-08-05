@@ -109,10 +109,10 @@ async fn filter_by_group() {
     assert_eq!(counter.load(Ordering::Relaxed), 6);
 
     assert!(stats.is_success());
-    assert_eq!(stats.total(), 12);
-    assert_eq!(stats.included(), 6);
-    assert_eq!(stats.launched(), 6);
-    assert_eq!(stats.ok(), 6);
+    assert_eq!(stats.tests_defined(), 12);
+    assert_eq!(stats.tests_included(), 6);
+    assert_eq!(stats.tests_launched(), 6);
+    assert_eq!(stats.tests_passed(), 6);
 }
 
 #[tokio::test]
@@ -132,8 +132,8 @@ async fn filter_by_test() {
     assert_eq!(counter.load(Ordering::Relaxed), 3);
 
     assert!(stats.is_success());
-    assert_eq!(stats.total(), 12);
-    assert_eq!(stats.included(), 3);
-    assert_eq!(stats.launched(), 3);
-    assert_eq!(stats.ok(), 3);
+    assert_eq!(stats.tests_defined(), 12);
+    assert_eq!(stats.tests_included(), 3);
+    assert_eq!(stats.tests_launched(), 3);
+    assert_eq!(stats.tests_passed(), 3);
 }

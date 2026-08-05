@@ -9,6 +9,7 @@ use crate::backtrace::Backtrace;
 use crate::filter::Filter;
 use crate::fixture::Fixtures;
 use crate::group::RunGroup;
+use crate::statistics::Event;
 use crate::statistics::Statistics;
 use async_backtrace::framed;
 use itertools::Itertools;
@@ -100,25 +101,39 @@ pub(crate) async fn run(
         .with_default_timeout(default_timeout)
         .with_concurrency(concurrency);
 
-    ctx.statistics.increment_total(group.test_names().len());
-    ctx.statistics.increment_included(
-        group
-            .test_names()
-            .iter()
-            .map(|name| name.split("::").collect_vec())
-            .filter(|parts| {
-                ctx.filter.consider_test(
-                    iter::once(&group.name()).chain(&parts[..parts.len() - 1]),
-                    parts.last().unwrap_or(&""),
-                )
-            })
-            .count(),
-    );
-
+    let mut empty = true;
     group
-        .run_group(vec![], ctx.clone())
-        .instrument(error_span!("group", "{}", group.name()))
-        .await;
+        .test_names()
+        .into_iter()
+        .inspect(|name| {
+            ctx.statistics.record(
+                format!("{group_name}::{name}", group_name = group.name()),
+                Event::TestDefined,
+            )
+        })
+        .filter(|name| {
+            let parts = name.split("::").collect_vec();
+            ctx.filter.consider_test(
+                iter::once(&group.name()).chain(&parts[..parts.len() - 1]),
+                parts.last().unwrap_or(&""),
+            )
+        })
+        .for_each(|name| {
+            empty = false;
+            ctx.statistics.record(
+                format!("{group_name}::{name}", group_name = group.name()),
+                Event::TestIncluded,
+            )
+        });
+
+    if empty {
+        error!("no tests to run");
+    } else {
+        group
+            .run_group(vec![], ctx.clone())
+            .instrument(error_span!("group", "{}", group.name()))
+            .await;
+    }
 
     backtrace::clear_panic_hook();
 

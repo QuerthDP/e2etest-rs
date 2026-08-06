@@ -184,8 +184,8 @@ fn generate_group(params: GroupParams) -> syn::Result<proc_macro2::TokenStream> 
 
         struct #group_fixture(#(std::sync::Arc<#fixtures>),*);
         impl e2etest::Fixture for #group_fixture {
-            async fn setup(setup: &mut impl e2etest::Setup) -> Self {
-                Self(#(setup.setup::<#fixtures>().await),*)
+            async fn setup(setup: &mut impl e2etest::Setup) -> Option<Self> {
+                Some(Self(#(setup.setup::<#fixtures>().await?),*))
             }
             async fn teardown(self) { }
         }
@@ -232,7 +232,6 @@ fn generate_group(params: GroupParams) -> syn::Result<proc_macro2::TokenStream> 
 struct TestParams {
     group: Path,
     timeout: Option<Expr>,
-    skip: Option<Expr>,
 }
 
 impl Parse for TestParams {
@@ -246,7 +245,6 @@ impl Parse for TestParams {
         let _: Token![=] = input.parse()?;
         let group: Path = input.parse()?;
         let mut timeout = None;
-        let mut skip = None;
 
         while !input.is_empty() {
             let _: Token![,] = input.parse()?;
@@ -255,22 +253,15 @@ impl Parse for TestParams {
             if name == "timeout" {
                 let _: Token![=] = input.parse()?;
                 timeout = Some(input.parse()?);
-            } else if name == "skip" {
-                let _: Token![=] = input.parse()?;
-                skip = Some(input.parse()?);
             } else {
                 return Err(syn::Error::new(
                     name.span(),
-                    "unexpected parameter, expected 'timeout' or 'skip'",
+                    "unexpected parameter, expected 'timeout'",
                 ));
             }
         }
 
-        Ok(Self {
-            group,
-            timeout,
-            skip,
-        })
+        Ok(Self { group, timeout })
     }
 }
 
@@ -313,7 +304,6 @@ fn take_fixtures(run: &ItemFn) -> syn::Result<Vec<TypePath>> {
 /// The macro takes the following parameters:
 /// - `group`: the path to the group this test belongs to (required)
 /// - `timeout`: an expression resolved to `Duration` as the timeout for the test (optional)
-/// - `skip`: a boolean expression indicating whether the test should be skipped (optional)
 ///
 /// The test function must be async, return `()`, and take as arguments a list of `Arc<Fixture>`
 /// as a list of fixtures used inside the test.
@@ -372,15 +362,6 @@ fn generate_test(params: TestParams, run: ItemFn) -> syn::Result<proc_macro2::To
     } else {
         quote! {}
     };
-    let skip = if let Some(skip) = &params.skip {
-        quote! {
-            fn skip(&self) -> bool {
-                #skip
-            }
-        }
-    } else {
-        quote! {}
-    };
 
     let fixtures = take_fixtures(&run)?;
     let fixtures_range = (0..fixtures.len()).map(Index::from);
@@ -388,8 +369,8 @@ fn generate_test(params: TestParams, run: ItemFn) -> syn::Result<proc_macro2::To
     let expanded = quote! {
         struct #test_fixture(#(std::sync::Arc<#fixtures>),*);
         impl e2etest::Fixture for #test_fixture {
-            async fn setup(setup: &mut impl e2etest::Setup) -> Self {
-                Self(#(setup.setup::<#fixtures>().await),*)
+            async fn setup(setup: &mut impl e2etest::Setup) -> Option<Self> {
+                Some(Self(#(setup.setup::<#fixtures>().await?),*))
             }
             async fn teardown(self) { }
         }
@@ -404,8 +385,6 @@ fn generate_test(params: TestParams, run: ItemFn) -> syn::Result<proc_macro2::To
             }
 
             #timeout
-
-            #skip
 
             fn run(&self, fixture: std::sync::Arc<#test_fixture>) -> impl std::future::Future<Output = ()> + Send + 'static {
                 async move {

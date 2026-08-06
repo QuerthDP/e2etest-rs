@@ -18,10 +18,10 @@ struct Counter(Arc<AtomicUsize>);
 struct FixtureRoot(Arc<Counter>);
 
 impl Fixture for FixtureRoot {
-    async fn setup(setup: &mut impl Setup) -> Self {
+    async fn setup(setup: &mut impl Setup) -> Option<Self> {
         let counter = setup.get::<Counter>().await.unwrap();
         counter.0.fetch_add(1, Ordering::Relaxed);
-        Self(counter)
+        Some(Self(counter))
     }
     async fn teardown(self) {
         self.0.0.fetch_add(1, Ordering::Relaxed);
@@ -32,10 +32,10 @@ impl Fixture for FixtureRoot {
 struct FixtureGroup(Arc<Counter>);
 
 impl Fixture for FixtureGroup {
-    async fn setup(setup: &mut impl Setup) -> Self {
+    async fn setup(setup: &mut impl Setup) -> Option<Self> {
         let counter = setup.get::<Counter>().await.unwrap();
         counter.0.fetch_add(1, Ordering::Relaxed);
-        Self(counter)
+        Some(Self(counter))
     }
     async fn teardown(self) {
         self.0.0.fetch_add(1, Ordering::Relaxed);
@@ -46,10 +46,10 @@ impl Fixture for FixtureGroup {
 struct FixtureTest(Arc<Counter>);
 
 impl Fixture for FixtureTest {
-    async fn setup(setup: &mut impl Setup) -> Self {
+    async fn setup(setup: &mut impl Setup) -> Option<Self> {
         let counter = setup.get::<Counter>().await.unwrap();
         counter.0.fetch_add(1, Ordering::Relaxed);
-        Self(counter)
+        Some(Self(counter))
     }
     async fn teardown(self) {
         self.0.0.fetch_add(1, Ordering::Relaxed);
@@ -123,10 +123,10 @@ mod first {
         pub(crate) struct FixtureDeep(Arc<Counter>);
 
         impl Fixture for FixtureDeep {
-            async fn setup(setup: &mut impl Setup) -> Self {
+            async fn setup(setup: &mut impl Setup) -> Option<Self> {
                 let counter = setup.get::<Counter>().await.unwrap();
                 counter.0.fetch_add(1, Ordering::Relaxed);
-                Self(counter)
+                Some(Self(counter))
             }
             async fn teardown(self) {
                 self.0.0.fetch_add(1, Ordering::Relaxed);

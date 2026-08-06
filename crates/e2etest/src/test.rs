@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::Instrument;
 use tracing::error_span;
+use tracing::info;
 
 /// A test that can be run by the test runner.
 pub trait Test: Send + Sync + 'static {
@@ -21,11 +22,6 @@ pub trait Test: Send + Sync + 'static {
     /// The timeout for the test. If `None`, the default timeout will be used.
     fn timeout(&self) -> Option<Duration> {
         None
-    }
-
-    /// Whether to skip this test. If `true`, the test will be skipped and not run.
-    fn skip(&self) -> bool {
-        false
     }
 
     /// The name of the test.
@@ -61,31 +57,48 @@ where
         let name = format!("{group_name}::{name}", name = self.name());
         Box::pin(
             async move {
-                if self.skip() {
-                    ctx.statistics.increment_skipped();
-                    return;
-                }
-
-                ctx.statistics.increment_launched();
-
                 // Setup the fixture. If it fails, we skip the test and teardown.
-                let Ok(fixture) = task::setup(
+                let fixture = task::setup(
                     ctx.fixtures.setup::<F>(),
                     F::timeout_setup().unwrap_or(ctx.default_timeout),
                     ctx.clone(),
                 )
-                .await
-                else {
-                    // Setup could have created other fixtures, so we need to teardown those
-                    _ = task::teardown(
-                        ctx.fixtures.teardown(),
-                        F::timeout_teardown().unwrap_or(ctx.default_timeout),
-                        ctx.clone(),
-                    )
-                    .await;
-                    ctx.statistics.record_test_failure(name);
-                    return;
+                .await;
+                let fixture = match fixture {
+                    Ok(Some(fixture)) => fixture,
+                    Ok(None) => {
+                        info!("Skipping test because fixture setup returned None");
+
+                        ctx.statistics.increment_skipped();
+
+                        // Setup could have created other fixtures, so we need to teardown those
+                        if task::teardown(
+                            ctx.fixtures.teardown(),
+                            F::timeout_teardown().unwrap_or(ctx.default_timeout),
+                            ctx.clone(),
+                        )
+                        .await
+                        .is_err()
+                        {
+                            ctx.statistics.record_test_failure(name);
+                        }
+                        return;
+                    }
+                    Err(()) => {
+                        // Setup could have created other fixtures, so we need to teardown those
+                        _ = task::teardown(
+                            ctx.fixtures.teardown(),
+                            F::timeout_teardown().unwrap_or(ctx.default_timeout),
+                            ctx.clone(),
+                        )
+                        .await;
+
+                        ctx.statistics.record_test_failure(name);
+                        return;
+                    }
                 };
+
+                ctx.statistics.increment_launched();
 
                 let test_result = task::test(
                     self.run(fixture.clone()),

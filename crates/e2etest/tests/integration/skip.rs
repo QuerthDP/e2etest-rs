@@ -5,6 +5,7 @@
 
 use e2etest::Config;
 use e2etest::Setup;
+use e2etest::Skip;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -16,27 +17,34 @@ struct Counter(Arc<AtomicUsize>);
 struct Fixture(Arc<Counter>);
 
 impl e2etest::Fixture for Fixture {
-    async fn setup(setup: &mut impl Setup) -> Self {
+    async fn setup(setup: &mut impl Setup) -> Option<Self> {
         let counter = setup.get::<Counter>().await.unwrap();
-        Self(counter)
+        Some(Self(counter))
     }
     async fn teardown(self) {}
 }
 
 e2etest::group!(name = skip_root);
 
+e2etest::group!(name = skip_group, parent = skip_root, fixtures = (Skip));
+
 #[e2etest::test(group = skip_root)]
 async fn first(fixture: Arc<Fixture>) {
     fixture.0.0.fetch_add(1, Ordering::Relaxed);
 }
 
-#[e2etest::test(group = skip_root, skip = false)]
+#[e2etest::test(group = skip_root)]
 async fn second(fixture: Arc<Fixture>) {
     fixture.0.0.fetch_add(1, Ordering::Relaxed);
 }
 
-#[e2etest::test(group = skip_root, skip = true)]
-async fn skipped(fixture: Arc<Fixture>) {
+#[e2etest::test(group = skip_root)]
+async fn skipped(fixture: Arc<Fixture>, _: Arc<Skip>) {
+    fixture.0.0.fetch_add(1, Ordering::Relaxed);
+}
+
+#[e2etest::test(group = skip_group)]
+async fn in_skipped_group(fixture: Arc<Fixture>) {
     fixture.0.0.fetch_add(1, Ordering::Relaxed);
 }
 
@@ -56,10 +64,12 @@ async fn skip() {
     assert_eq!(counter.load(Ordering::Relaxed), 2);
 
     assert!(stats.is_success());
-    assert_eq!(stats.total(), 3);
+    assert_eq!(stats.total(), 4);
+    assert_eq!(stats.included(), 4);
     assert_eq!(stats.launched(), 2);
     assert_eq!(stats.ok(), 2);
     assert_eq!(stats.failed_tests(), 0);
     assert_eq!(stats.failed_groups(), 0);
     assert_eq!(stats.skipped(), 1);
+    assert_eq!(stats.skipped_groups(), 1);
 }

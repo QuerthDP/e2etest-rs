@@ -194,8 +194,8 @@ mod tests {
     }
 
     impl Fixture for GroupFixture {
-        async fn setup(_: &mut impl Setup) -> Self {
-            Self
+        async fn setup(_: &mut impl Setup) -> Option<Self> {
+            Some(Self)
         }
         async fn teardown(self) {}
     }
@@ -210,8 +210,8 @@ mod tests {
     }
 
     impl Fixture for TestFixture {
-        async fn setup(_: &mut impl Setup) -> Self {
-            Self
+        async fn setup(_: &mut impl Setup) -> Option<Self> {
+            Some(Self)
         }
         async fn teardown(self) {}
     }

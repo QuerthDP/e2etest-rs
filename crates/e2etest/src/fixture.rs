@@ -26,7 +26,7 @@ impl Fixtures {
         Self(Arc::new(Mutex::new(Inner::with_permanent(fixtures))))
     }
 
-    pub(crate) fn setup<F: Fixture>(&self) -> impl Future<Output = Arc<F>> + Send + use<F> {
+    pub(crate) fn setup<F: Fixture>(&self) -> impl Future<Output = Option<Arc<F>>> + Send + use<F> {
         let inner = Arc::clone(&self.0);
         async move { inner.lock().await.setup::<F>().await }
     }
@@ -42,7 +42,7 @@ impl Fixtures {
 /// A fixture.
 ///
 /// It is a type that can be set up and torn down by the fixture manager.
-pub trait Fixture: Any + Send + Sync {
+pub trait Fixture: Any + Send + Sync + Sized {
     /// The timeout for setting up this fixture. If the setup takes longer than this, the test will
     /// fail. If this returns `None`, there is default timeout for setting up this fixture.
     fn timeout_setup() -> Option<std::time::Duration> {
@@ -57,7 +57,7 @@ pub trait Fixture: Any + Send + Sync {
 
     /// Set up this fixture. This will be called by the fixture manager when setting up this
     /// fixture.
-    fn setup(setup: &mut impl Setup) -> impl Future<Output = Self> + Send;
+    fn setup(setup: &mut impl Setup) -> impl Future<Output = Option<Self>> + Send;
 
     /// Tear down this fixture. This will be called by the fixture manager when tearing down this
     /// fixture.
@@ -85,10 +85,20 @@ impl<F: Fixture> Teardown for F {
 pub trait Setup: Send {
     /// Set up a new fixture. If the fixture is already set up, it will return the existing
     /// fixture. Otherwise, it will set up a new fixture and return it.
-    fn setup<F: Fixture>(&mut self) -> impl Future<Output = Arc<F>> + Send;
+    fn setup<F: Fixture>(&mut self) -> impl Future<Output = Option<Arc<F>>> + Send;
 
     /// Get a fixture. If the fixture is not set up, this will return `None`.
     fn get<F: Send + Sync + 'static>(&self) -> impl Future<Output = Option<Arc<F>>> + Send;
+}
+
+/// A fixture that always skips a test or a group.
+pub struct Skip;
+
+impl Fixture for Skip {
+    async fn setup(_setup: &mut impl Setup) -> Option<Self> {
+        None
+    }
+    async fn teardown(self) {}
 }
 
 struct Inner {
@@ -97,16 +107,18 @@ struct Inner {
 }
 
 impl Setup for Inner {
-    async fn setup<F: Fixture>(&mut self) -> Arc<F> {
+    async fn setup<F: Fixture>(&mut self) -> Option<Arc<F>> {
         if self.permanent.contains_key(&TypeId::of::<F>())
             || self.cache.contains_key(&TypeId::of::<F>())
         {
-            return self.get::<F>().await.unwrap();
+            return self.get::<F>().await;
         }
-        let fixture = Arc::new(F::setup(self).await);
-        self.cache
-            .insert(TypeId::of::<F>(), Arc::clone(&fixture) as Arc<dyn Teardown>);
-        fixture
+        F::setup(self).await.map(|fixture| {
+            let fixture = Arc::new(fixture);
+            self.cache
+                .insert(TypeId::of::<F>(), Arc::clone(&fixture) as Arc<dyn Teardown>);
+            fixture
+        })
     }
 
     async fn get<F: Send + Sync + 'static>(&self) -> Option<Arc<F>> {

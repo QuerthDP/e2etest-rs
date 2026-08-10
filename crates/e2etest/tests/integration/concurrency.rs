@@ -116,8 +116,8 @@ async fn concurrency() {
     assert_eq!(&log[40..50], &["test5"; 10]);
 
     assert!(stats.is_success());
-    assert_eq!(stats.total(), 5);
-    assert_eq!(stats.included(), 5);
-    assert_eq!(stats.launched(), 5);
-    assert_eq!(stats.ok(), 5);
+    assert_eq!(stats.tests_defined(), 5);
+    assert_eq!(stats.tests_included(), 5);
+    assert_eq!(stats.tests_launched(), 5);
+    assert_eq!(stats.tests_passed(), 5);
 }

@@ -85,10 +85,10 @@ async fn run_root1() {
     assert_eq!(counter.load(Ordering::Relaxed), 7);
 
     assert!(stats.is_success());
-    assert_eq!(stats.total(), 1);
-    assert_eq!(stats.launched(), 1);
-    assert_eq!(stats.ok(), 1);
-    assert_eq!(stats.failed_tests(), 0);
+    assert_eq!(stats.tests_defined(), 1);
+    assert_eq!(stats.tests_launched(), 1);
+    assert_eq!(stats.tests_passed(), 1);
+    assert_eq!(stats.tests_failed(), 0);
 }
 
 mod root {
@@ -203,8 +203,8 @@ async fn run_hierarchy_root2() {
     assert_eq!(counter.load(Ordering::Relaxed), 32);
 
     assert!(stats.is_success());
-    assert_eq!(stats.total(), 6);
-    assert_eq!(stats.launched(), 6);
-    assert_eq!(stats.ok(), 6);
-    assert_eq!(stats.failed_tests(), 0);
+    assert_eq!(stats.tests_defined(), 6);
+    assert_eq!(stats.tests_launched(), 6);
+    assert_eq!(stats.tests_passed(), 6);
+    assert_eq!(stats.tests_failed(), 0);
 }

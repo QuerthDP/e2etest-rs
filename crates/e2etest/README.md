@@ -109,10 +109,11 @@ tokio::runtime::Runtime::new().unwrap().block_on(async move {
         .with_default_timeout(Duration::from_secs(10));
     let stats = e2etest::run(config, sample::root()).await;
     assert!(stats.is_success());
-    assert_eq!(stats.total(), 3);
-    assert_eq!(stats.launched(), 2);
-    assert_eq!(stats.ok(), 2);
-    assert_eq!(stats.skipped(), 1);
+    assert_eq!(stats.tests_defined(), 3);
+    assert_eq!(stats.tests_included(), 3);
+    assert_eq!(stats.tests_launched(), 2);
+    assert_eq!(stats.tests_passed(), 2);
+    assert_eq!(stats.tests_skipped(), 1);
 });
 ```
 

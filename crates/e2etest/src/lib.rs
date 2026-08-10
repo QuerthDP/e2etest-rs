@@ -139,6 +139,7 @@ pub struct Config {
     permanent_fixtures: Vec<Arc<dyn Any + Send + Sync>>,
     filters: Vec<String>,
     default_timeout: Duration,
+    concurrency: usize,
 }
 
 impl Default for Config {
@@ -147,6 +148,7 @@ impl Default for Config {
             permanent_fixtures: Vec::new(),
             filters: Vec::new(),
             default_timeout: DEFAULT_TIMEOUT,
+            concurrency: 1,
         }
     }
 }
@@ -169,6 +171,12 @@ impl Config {
         self.default_timeout = timeout;
         self
     }
+
+    /// Set the maximum number of tests to run concurrently.
+    pub fn with_concurrency(mut self, concurrency: usize) -> Self {
+        self.concurrency = concurrency;
+        self
+    }
 }
 
 /// Main entry point for running tests.
@@ -183,7 +191,14 @@ pub async fn run(config: Config, group: Box<dyn RunGroup>) -> Statistics {
     let fixtures = Fixtures::with_permanent(config.permanent_fixtures.into_iter());
     let filter = Filter::new(&config.filters, group.as_ref());
 
-    run::run(fixtures, group, filter, config.default_timeout).await
+    run::run(
+        fixtures,
+        group,
+        filter,
+        config.default_timeout,
+        config.concurrency,
+    )
+    .await
 }
 
 #[cfg(doctest)]

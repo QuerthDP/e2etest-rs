@@ -27,6 +27,8 @@ pub struct RunContext {
     pub(crate) backtrace: Backtrace,
     pub(crate) filter: Filter,
     pub(crate) default_timeout: Duration,
+    pub(crate) concurrency: usize,
+    pub(crate) concurrency_enabled: bool,
 }
 
 impl RunContext {
@@ -37,6 +39,8 @@ impl RunContext {
             backtrace: Backtrace::new(),
             filter: Filter::empty(),
             default_timeout: DEFAULT_TIMEOUT,
+            concurrency: 1,
+            concurrency_enabled: true,
         }
     }
 
@@ -59,6 +63,19 @@ impl RunContext {
         self.default_timeout = default_timeout;
         self
     }
+
+    pub(crate) fn with_concurrency(mut self, concurrency: usize) -> Self {
+        self.concurrency = if concurrency > 0 { concurrency } else { 1 };
+        self
+    }
+
+    pub(crate) fn update_concurrency_enabled(&mut self, enabled_for_next_level: bool) {
+        self.concurrency_enabled &= enabled_for_next_level;
+    }
+
+    pub(crate) fn is_concurrency_enabled(&self, enabled_for_next_level: bool) -> bool {
+        self.concurrency_enabled & enabled_for_next_level
+    }
 }
 
 impl Debug for RunContext {
@@ -74,12 +91,14 @@ pub(crate) async fn run(
     group: Box<dyn RunGroup>,
     filter: Filter,
     default_timeout: Duration,
+    concurrency: usize,
 ) -> Statistics {
     let ctx = RunContext::new()
         .with_fixtures(fixtures)
         .with_filter(filter)
         .with_backtrace(backtrace::setup_panic_hook())
-        .with_default_timeout(default_timeout);
+        .with_default_timeout(default_timeout)
+        .with_concurrency(concurrency);
 
     ctx.statistics.increment_total(group.test_names().len());
     ctx.statistics.increment_included(

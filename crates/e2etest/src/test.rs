@@ -40,6 +40,9 @@ pub trait RunTest: Send + Sync + 'static {
 
     /// Run the test with the given fixture and collect statistics.
     fn run_test(&self, group_name: &str, ctx: RunContext) -> BoxFuture<'_, ()>;
+
+    /// Whether the test can be run concurrently with other tests.
+    fn can_run_concurrently(&self) -> bool;
 }
 
 impl<F, T> RunTest for T
@@ -50,6 +53,10 @@ where
 {
     fn name(&self) -> &str {
         self.name()
+    }
+
+    fn can_run_concurrently(&self) -> bool {
+        F::test_can_run_concurrently()
     }
 
     #[framed]

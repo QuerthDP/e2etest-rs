@@ -352,16 +352,21 @@ async fn run_node(node_config: &VectorStoreNodeConfig, state: &State, workdir: &
     if let Some(u) = node_config.user.as_deref()
         && let Some(p) = node_config.password.as_deref()
     {
-        File::create_new(workdir.path().join("password"))
+        let password_path = workdir.path().join("password");
+
+        let mut file = File::create_new(&password_path)
             .await
-            .expect("run_node: failed to create auth_credentials file")
-            .write_all(p.as_bytes())
+            .expect("run_node: failed to create the password file");
+        file.write_all(p.as_bytes())
             .await
-            .expect("run_node: failed to write password to auth_credentials file");
+            .expect("run_node: failed to write the password file");
+        file.flush()
+            .await
+            .expect("run_node: failed to flush the password file");
 
         cmd.env("VECTOR_STORE_SCYLLADB_USERNAME", u).env(
             "VECTOR_STORE_SCYLLADB_PASSWORD_FILE",
-            workdir.path().join("password").to_str().unwrap(),
+            password_path.to_str().unwrap(),
         );
     }
 
